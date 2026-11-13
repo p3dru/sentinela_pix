@@ -1,6 +1,7 @@
 """Engine, sessão e modelos ORM."""
 from datetime import datetime
 
+import redis
 from sqlalchemy import JSON, ForeignKey, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -63,3 +64,7 @@ class Rotulo(Base):
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+
+
+def obter_redis() -> redis.Redis:
+    return redis.Redis.from_url(settings.redis_url, decode_responses=True)
