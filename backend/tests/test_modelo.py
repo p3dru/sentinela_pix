@@ -1,4 +1,7 @@
+import json
+import os
 from datetime import datetime
+from pathlib import Path
 
 import fakeredis
 import numpy as np
@@ -66,3 +69,15 @@ def test_processar_idempotente(modelo_treinado: dict, redis_fake: fakeredis.Fake
     assert primeira["decisao"] == "BLOQUEAR"  # dispositivo novo de madrugada com valor > 2000
     assert primeira["motivos"][0]["feature"] == "regra"
     assert redis_fake.zcard("orig:conta-00001:ts") == 1  # registrou no estado uma única vez
+
+
+def test_atualizar_recarrega_meta_alterado(modelo_treinado: dict) -> None:
+    meta = Path(Modelo._caminhos[1])
+    original = meta.read_text()
+    try:
+        meta.write_text(json.dumps({**json.loads(original), "versao": "v-novo"}))
+        os.utime(meta, ns=(1, 1))
+        assert Modelo.atualizar() and Modelo.versao() == "v-novo"
+    finally:
+        meta.write_text(original)
+        assert Modelo.atualizar() and Modelo.versao() == modelo_treinado["versao"]

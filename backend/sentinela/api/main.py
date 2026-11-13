@@ -54,7 +54,7 @@ Redis = Annotated[redis.Redis, Depends(get_redis)]
 
 
 def exigir_modelo() -> None:
-    if not Modelo.carregado():
+    if not Modelo.atualizar():
         raise HTTPException(503, "Modelo não carregado: rode make seed")
 
 
@@ -103,6 +103,7 @@ def _grafo(s: Session, r: redis.Redis, conta: str) -> dict[str, list[dict[str, A
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    Modelo.atualizar()
     return {"status": "ok", "modelo_versao": Modelo.versao()}
 
 
@@ -196,5 +197,5 @@ def metricas(s: Sessao) -> dict[str, Any]:
         "latencia_ms": {f"p{p}": round(float(np.percentile(lat, p)), 3) for p in (50, 95, 99)},
         "rotulados": s.scalar(select(func.count()).select_from(Rotulo)),
         "precisao_rotulos": round(rotulos.count("fraude") / len(rotulos), 4) if rotulos else None,
-        "modelo": Modelo.meta,
+        "modelo": Modelo.meta if Modelo.atualizar() else {},
     }

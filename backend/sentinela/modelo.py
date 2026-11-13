@@ -15,19 +15,34 @@ class Modelo:
     booster: lgb.Booster | None = None
     explainer: shap.TreeExplainer | None = None
     meta: ClassVar[dict[str, Any]] = {}
+    _caminhos: ClassVar[tuple[str, str] | None] = None
+    _mtime: ClassVar[int | None] = None
 
     @classmethod
     def carregar(cls, model_path: str | None = None, meta_path: str | None = None) -> bool:
         """Carrega modelo e meta; False (e modelo vazio) se os arquivos não existirem."""
         model_path = model_path or settings.model_path
         meta_path = meta_path or settings.model_meta_path
+        cls._caminhos = (model_path, meta_path)
         if not (Path(model_path).exists() and Path(meta_path).exists()):
-            cls.booster, cls.explainer, cls.meta = None, None, {}
+            cls.booster, cls.explainer, cls.meta, cls._mtime = None, None, {}, None
             return False
+        mtime = Path(meta_path).stat().st_mtime_ns
         cls.booster = lgb.Booster(model_file=model_path)
         cls.explainer = shap.TreeExplainer(cls.booster)
         cls.meta = json.loads(Path(meta_path).read_text())
+        cls._mtime = mtime
         return True
+
+    @classmethod
+    def atualizar(cls) -> bool:
+        """Recarrega se o meta mudou em disco (ex.: novo seed); devolve se há modelo."""
+        caminhos = cls._caminhos or (settings.model_path, settings.model_meta_path)
+        meta = Path(caminhos[1])
+        mtime = meta.stat().st_mtime_ns if meta.exists() else None
+        if mtime != cls._mtime:
+            cls.carregar(*caminhos)
+        return cls.carregado()
 
     @classmethod
     def carregado(cls) -> bool:

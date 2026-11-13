@@ -90,3 +90,21 @@ def test_produtor_consumer(modelo_treinado, redis_fake):
         assert s.scalar(select(func.count()).where(Decisao.transacao_id.in_(ids))) == 30
     assert redis_fake.xpending(settings.stream_name, settings.consumer_group)["pending"] == 0
     assert redis_fake.exists(f"grafo:{txs[0]['destino']}")
+
+
+def test_consumer_sobrevive_a_flushdb(modelo_treinado, redis_fake):
+    from sentinela import consumer, produtor
+
+    with SessionLocal() as s:
+        txs = produtor.gerar_ao_vivo(s, 5, seed_contas=7)
+    ler, chamadas = redis_fake.xreadgroup, []
+
+    def ler_apos_flush(*a, **k):
+        if not chamadas:  # simula o seed: apaga stream e grupo com o consumer no ar
+            redis_fake.flushdb()
+            produtor.publicar(redis_fake, txs, tps=0)
+        chamadas.append(1)
+        return ler(*a, **k)
+
+    redis_fake.xreadgroup = ler_apos_flush
+    assert consumer.consumir(redis_fake, max_msgs=5, block=10) == 5

@@ -54,18 +54,30 @@ def consumir(
 ) -> int:
     """Laço de consumo; com `max_msgs` (testes) para ao atingir o total ou esvaziar o stream."""
     stream, grupo = settings.stream_name, settings.consumer_group
-    try:
-        r.xgroup_create(stream, grupo, id="0", mkstream=True)
-    except redis_lib.ResponseError as e:
-        if "BUSYGROUP" not in str(e):
-            raise
+
+    def criar_grupo() -> None:
+        try:
+            r.xgroup_create(stream, grupo, id="0", mkstream=True)
+        except redis_lib.ResponseError as e:
+            if "BUSYGROUP" not in str(e):
+                raise
+
+    criar_grupo()
     estado = EstadoRedis(r)
     n, soma_lat, t0 = 0, 0.0, time.perf_counter()
     cursor = "0"  # primeiro as pendentes de uma execução anterior, depois as novas
     with SessionLocal() as s:
         base = fraudes_treino(s)
         while max_msgs is None or n < max_msgs:
-            resp = r.xreadgroup(grupo, nome, {stream: cursor}, count=100, block=block)
+            try:
+                resp = r.xreadgroup(grupo, nome, {stream: cursor}, count=100, block=block)
+            except redis_lib.ResponseError as e:  # seed fez FLUSHDB: stream e grupo sumiram
+                if "NOGROUP" not in str(e) and "UNBLOCKED" not in str(e):
+                    raise
+                criar_grupo()
+                cursor = "0"
+                continue
+            Modelo.atualizar()
             msgs = resp[0][1] if resp else []
             if not msgs:
                 if cursor == "0":
@@ -97,8 +109,10 @@ def consumir(
 
 def main() -> None:
     init_db()
-    if not Modelo.carregar():
-        raise SystemExit("Modelo não encontrado: rode make seed")
+    if not Modelo.atualizar():
+        print("Modelo não encontrado: aguardando make seed", flush=True)
+        while not Modelo.atualizar():
+            time.sleep(5)
     consumir(obter_redis())
 
 
