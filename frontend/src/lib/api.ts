@@ -2,13 +2,19 @@ import type { CasoDetalhe, Casos, Decisao, Metricas, Resumo, RotuloValor } from 
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export class ErroApi extends Error {
+  constructor(public status: number, caminho: string) {
+    super(`Erro ${status} em ${caminho}`);
+  }
+}
+
 async function req<T>(caminho: string, corpo?: unknown, metodo = corpo ? "POST" : "GET"): Promise<T> {
   const r = await fetch(`${API_URL}${caminho}`, {
     method: metodo,
     headers: corpo ? { "Content-Type": "application/json" } : undefined,
     body: corpo ? JSON.stringify(corpo) : undefined,
   });
-  if (!r.ok) throw new Error(`Erro ${r.status} em ${caminho}`);
+  if (!r.ok) throw new ErroApi(r.status, caminho);
   return r.json();
 }
 

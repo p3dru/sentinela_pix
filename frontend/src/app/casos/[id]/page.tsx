@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { gerarResumo, obterCaso, rotular } from "../../../lib/api";
-import { BADGE, brl, dataHora } from "../../../lib/formato";
+import { ErroApi, gerarResumo, obterCaso, rotular } from "../../../lib/api";
+import { BADGE, brl, dataHora, valorMotivo } from "../../../lib/formato";
 import type { Grafo, Motivo, RotuloValor } from "../../../lib/tipos";
 
 const CARD = "rounded-lg border border-slate-800 bg-slate-900 p-4";
@@ -27,7 +27,7 @@ function Motivos({ motivos }: { motivos: Motivo[] }) {
           <li key={m.feature}>
             <div className="flex justify-between gap-4">
               <span className="text-slate-200">
-                {m.rotulo} <span className="text-slate-500">= {m.valor ?? "—"}</span>
+                {m.rotulo} <span className="text-slate-500">= {valorMotivo(m.feature, m.valor)}</span>
               </span>
               <span className={`tabular-nums ${imp > 0 ? "text-rose-400" : "text-emerald-400"}`}>
                 {imp > 0 ? "+" : ""}
@@ -96,20 +96,30 @@ export default function Detalhe() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [analista, setAnalista] = useState("analista.demo");
-  const { data: c, isError } = useQuery({ queryKey: ["caso", id], queryFn: () => obterCaso(id) });
+  const naoExiste = (e: unknown) => e instanceof ErroApi && e.status === 404;
+  const { data: c, error } = useQuery({
+    queryKey: ["caso", id],
+    queryFn: () => obterCaso(id),
+    retry: (n, e) => !naoExiste(e) && n < 2,
+  });
   const resumo = useMutation({ mutationFn: () => gerarResumo(id) });
   const rotulo = useMutation({
     mutationFn: (r: RotuloValor) => rotular(id, r, analista),
     onSuccess: () => qc.invalidateQueries(),
   });
 
-  if (isError) return <p className="text-rose-400">Caso não encontrado.</p>;
-  if (!c) return <p className="text-slate-400">Carregando…</p>;
+  if (!c)
+    return error ? (
+      <p className="text-rose-400">{naoExiste(error) ? "Caso não encontrado." : "Não foi possível carregar o caso."}</p>
+    ) : (
+      <p className="text-slate-400">Carregando…</p>
+    );
 
   const { transacao: t, decisao: d } = c;
 
   return (
     <div className="space-y-4">
+      <title>{`Caso ${brl(c.transacao.valor)} · Sentinela Pix`}</title>
       <Link href="/casos" className="text-sm text-slate-400 hover:text-white">
         ← Fila de casos
       </Link>
@@ -194,6 +204,7 @@ export default function Detalhe() {
 
       <section className={CARD}>
         <h2 className="mb-3 text-sm font-medium text-slate-300">Histórico da origem</h2>
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="text-xs uppercase text-slate-400">
             <tr>
@@ -215,6 +226,7 @@ export default function Detalhe() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   );

@@ -24,8 +24,12 @@ export default function Painel() {
     refetchInterval: 5000,
   });
 
-  if (isError) return <p className="text-rose-400">Não foi possível carregar as métricas da API.</p>;
-  if (!m) return <p className="text-slate-400">Carregando…</p>;
+  if (!m)
+    return isError ? (
+      <p className="text-rose-400">Não foi possível carregar as métricas da API.</p>
+    ) : (
+      <p className="text-slate-400">Carregando…</p>
+    );
 
   const total = m.total || 1;
   const mm = m.modelo?.metricas;
@@ -33,9 +37,15 @@ export default function Painel() {
 
   return (
     <div className="space-y-6">
+      <title>Painel · Sentinela Pix</title>
       <h1 className="text-xl font-semibold text-white">Painel</h1>
+      {isError && (
+        <p role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+          Sem conexão com a API; exibindo os últimos dados.
+        </p>
+      )}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card titulo="Total analisado" valor={m.total.toLocaleString("pt-BR")} />
         <Card titulo="Em revisão" valor={pct(m.por_decisao.REVISAR / total)} />
         <Card titulo="Valor bloqueado" valor={brl(m.valor_bloqueado)} />

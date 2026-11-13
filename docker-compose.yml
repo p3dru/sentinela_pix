@@ -3,6 +3,7 @@ x-backend-env: &backend-env
   REDIS_URL: redis://redis:6379/0
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   CORS_ORIGINS: http://localhost:3000
+  TZ: America/Sao_Paulo  # o sistema usa hora local sem fuso
 
 services:
   postgres:

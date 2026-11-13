@@ -3,6 +3,7 @@ from datetime import datetime
 
 import redis
 from sqlalchemy import JSON, ForeignKey, create_engine
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -63,7 +64,10 @@ class Rotulo(Base):
 
 
 def init_db() -> None:
-    Base.metadata.create_all(engine)
+    try:
+        Base.metadata.create_all(engine)
+    except DBAPIError:  # API e consumer criando as tabelas ao mesmo tempo: na 2ª elas já existem
+        Base.metadata.create_all(engine)
 
 
 def obter_redis() -> redis.Redis:

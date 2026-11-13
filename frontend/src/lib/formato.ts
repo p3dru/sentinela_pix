@@ -20,3 +20,11 @@ export const FUNDO: Record<Decisao, string> = {
 
 export const corScore = (s: number) =>
   s >= 0.85 ? "bg-rose-500" : s >= 0.4 ? "bg-amber-500" : "bg-emerald-500";
+
+const BINARIAS = new Set(["madrugada", "destinatario_novo", "dispositivo_novo"]);
+export const valorMotivo = (feature: string, v: number | null) =>
+  v == null
+    ? "—"
+    : BINARIAS.has(feature)
+      ? v ? "Sim" : "Não"
+      : v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
