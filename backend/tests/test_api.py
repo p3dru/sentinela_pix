@@ -74,3 +74,19 @@ def test_metricas(cliente):
     assert m["valor_bloqueado"] >= 3000 and m["rotulados"] >= 1
     assert 0 < m["precisao_rotulos"] <= 1
     assert set(m["latencia_ms"]) == {"p50", "p95", "p99"} and m["modelo"]["versao"]
+
+
+def test_produtor_consumer(modelo_treinado, redis_fake):
+    from sentinela import consumer, produtor
+    from sentinela.config import settings
+
+    with SessionLocal() as s:
+        txs = produtor.gerar_ao_vivo(s, 30, seed_contas=7)
+    assert produtor.publicar(redis_fake, txs, tps=0) == 30
+    redis_fake.xadd(settings.stream_name, {"dados": "{"})  # inválida: descartada sem travar a fila
+    assert consumer.consumir(redis_fake, max_msgs=31, block=10, recalcular_cada=10) == 31
+    with SessionLocal() as s:
+        ids = [t["id"] for t in txs]
+        assert s.scalar(select(func.count()).where(Decisao.transacao_id.in_(ids))) == 30
+    assert redis_fake.xpending(settings.stream_name, settings.consumer_group)["pending"] == 0
+    assert redis_fake.exists(f"grafo:{txs[0]['destino']}")
