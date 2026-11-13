@@ -46,6 +46,7 @@ services:
   consumer:
     build: ./backend
     command: python -m sentinela.consumer
+    restart: unless-stopped
     environment: *backend-env
     volumes:
       - ./backend/artifacts:/app/artifacts

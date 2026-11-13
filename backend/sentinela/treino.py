@@ -1,5 +1,6 @@
 """Treino do modelo com split temporal 80/20 (`python -m sentinela.treino`)."""
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -96,8 +97,11 @@ def treinar(
         "treinado_em": agora.isoformat(timespec="seconds"),
     }
     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
-    booster.save_model(model_path)
-    Path(meta_path).write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    # grava em .tmp e troca: quem lê vê o arquivo antigo inteiro ou o novo inteiro
+    booster.save_model(f"{model_path}.tmp")
+    os.replace(f"{model_path}.tmp", model_path)
+    Path(f"{meta_path}.tmp").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    os.replace(f"{meta_path}.tmp", meta_path)
     return meta
 
 

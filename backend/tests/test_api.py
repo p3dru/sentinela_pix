@@ -1,9 +1,12 @@
+import shutil
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from sentinela.api.main import app, get_redis
 from sentinela.db import Decisao, SessionLocal
+from sentinela.modelo import Modelo
 
 
 @pytest.fixture
@@ -97,14 +100,40 @@ def test_consumer_sobrevive_a_flushdb(modelo_treinado, redis_fake):
 
     with SessionLocal() as s:
         txs = produtor.gerar_ao_vivo(s, 5, seed_contas=7)
-    ler, chamadas = redis_fake.xreadgroup, []
+    for i, tx in enumerate(txs):  # ids próprios: o gerador repete os de test_produtor_consumer
+        tx["id"] = f"flush-{i}"
+    ids = [t["id"] for t in txs]
+
+    def decididas() -> int:
+        with SessionLocal() as s:
+            return s.scalar(select(func.count()).where(Decisao.transacao_id.in_(ids)))
+
+    produtor.publicar(redis_fake, txs[:2], tps=0)
+    ler, flush_feito = redis_fake.xreadgroup, []
 
     def ler_apos_flush(*a, **k):
-        if not chamadas:  # simula o seed: apaga stream e grupo com o consumer no ar
+        if not flush_feito and decididas() == 2:  # simula o seed com o consumer no ar
             redis_fake.flushdb()
-            produtor.publicar(redis_fake, txs, tps=0)
-        chamadas.append(1)
+            produtor.publicar(redis_fake, txs[2:], tps=0)
+            flush_feito.append(1)
         return ler(*a, **k)
 
     redis_fake.xreadgroup = ler_apos_flush
     assert consumer.consumir(redis_fake, max_msgs=5, block=10) == 5
+    assert flush_feito and decididas() == 5  # consumiu antes e depois da limpeza
+
+
+def test_sem_modelo_depois_seed(cliente, tmp_path):
+    originais = Modelo._caminhos
+    vazio = (str(tmp_path / "modelo.txt"), str(tmp_path / "modelo_meta.json"))
+    try:
+        assert not Modelo.carregar(*vazio)
+        assert cliente.get("/health").json()["modelo_versao"] is None
+        assert cliente.post("/decisao", json=_tx("sem-modelo")).status_code == 503
+        for origem, destino in zip(originais, vazio, strict=True):  # o "seed" grava o modelo
+            shutil.copy(origem, destino)
+        assert cliente.get("/health").json()["modelo_versao"].startswith("v")
+        assert cliente.post("/decisao", json=_tx("sem-modelo")).status_code == 200
+        assert cliente.get("/metricas").json()["modelo"]["versao"].startswith("v")
+    finally:
+        assert Modelo.carregar(*originais)

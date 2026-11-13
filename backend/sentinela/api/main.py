@@ -197,5 +197,5 @@ def metricas(s: Sessao) -> dict[str, Any]:
         "latencia_ms": {f"p{p}": round(float(np.percentile(lat, p)), 3) for p in (50, 95, 99)},
         "rotulados": s.scalar(select(func.count()).select_from(Rotulo)),
         "precisao_rotulos": round(rotulos.count("fraude") / len(rotulos), 4) if rotulos else None,
-        "modelo": Modelo.meta if Modelo.atualizar() else {},
+        "modelo": Modelo.meta_atual() if Modelo.atualizar() else {},
     }

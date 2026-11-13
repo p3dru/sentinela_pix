@@ -73,11 +73,25 @@ def test_processar_idempotente(modelo_treinado: dict, redis_fake: fakeredis.Fake
 
 def test_atualizar_recarrega_meta_alterado(modelo_treinado: dict) -> None:
     meta = Path(Modelo._caminhos[1])
-    original = meta.read_text()
+    original, booster = meta.read_text(), Modelo._atual[0]
     try:
         meta.write_text(json.dumps({**json.loads(original), "versao": "v-novo"}))
         os.utime(meta, ns=(1, 1))
         assert Modelo.atualizar() and Modelo.versao() == "v-novo"
+        assert Modelo._atual[0] is not booster  # o booster também foi recarregado
+    finally:
+        meta.write_text(original)
+        assert Modelo.atualizar() and Modelo.versao() == modelo_treinado["versao"]
+
+
+def test_meta_invalido_mantem_versao_anterior(modelo_treinado: dict) -> None:
+    meta = Path(Modelo._caminhos[1])
+    original = meta.read_text()
+    try:
+        meta.write_text("")  # meta pela metade, com mtime novo
+        os.utime(meta, ns=(2, 2))
+        assert Modelo.atualizar() and Modelo.versao() == modelo_treinado["versao"]
+        assert 0.0 <= Modelo.avaliar(F)[0] <= 1.0
     finally:
         meta.write_text(original)
         assert Modelo.atualizar() and Modelo.versao() == modelo_treinado["versao"]

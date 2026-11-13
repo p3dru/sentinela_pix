@@ -21,7 +21,7 @@ CAMPOS = ("origem", "destino", "valor", "dispositivo")
 
 def fraudes_treino(s: Session) -> set[str]:
     """Destinos de fraude da janela de treino (primeiros 80% do que existia ao treinar)."""
-    ate = Modelo.meta.get("treinado_em")
+    ate = Modelo.meta_atual().get("treinado_em")
     if not ate:
         return set()
     historico = Transacao.ts <= datetime.fromisoformat(ate)
@@ -67,7 +67,7 @@ def consumir(
     n, soma_lat, t0 = 0, 0.0, time.perf_counter()
     cursor = "0"  # primeiro as pendentes de uma execução anterior, depois as novas
     with SessionLocal() as s:
-        base = fraudes_treino(s)
+        versao, base = Modelo.versao(), fraudes_treino(s)
         while max_msgs is None or n < max_msgs:
             try:
                 resp = r.xreadgroup(grupo, nome, {stream: cursor}, count=100, block=block)
@@ -77,7 +77,8 @@ def consumir(
                 criar_grupo()
                 cursor = "0"
                 continue
-            Modelo.atualizar()
+            if Modelo.atualizar() and Modelo.versao() != versao:  # novo seed: base de fraudes mudou
+                versao, base = Modelo.versao(), fraudes_treino(s)
             msgs = resp[0][1] if resp else []
             if not msgs:
                 if cursor == "0":

@@ -39,10 +39,10 @@ def processar(tx: dict[str, Any], estado: Estado, sessao: Session) -> dict[str, 
 
     conta = sessao.get(Conta, tx["destino"])
     f = calcular_features(tx, estado, {conta.id: conta.criada_em} if conta else {})
-    score = Modelo.pontuar(f)
+    score, motivos_shap, versao = Modelo.avaliar(f)
     decisao, regras = decidir(score, f)
     motivos = [{"feature": "regra", "rotulo": r, "valor": None, "impacto": None} for r in regras]
-    motivos += Modelo.explicar(f)
+    motivos += motivos_shap
     estado.registrar(tx)
 
     if sessao.get(Transacao, tx["id"]) is None:
@@ -56,7 +56,7 @@ def processar(tx: dict[str, Any], estado: Estado, sessao: Session) -> dict[str, 
         sessao.flush()  # a decisão referencia a transação
     registro = Decisao(
         transacao_id=tx["id"], score=score, decisao=decisao, motivos=motivos, features=f,
-        modelo_versao=Modelo.versao() or "", latencia_ms=round((time.perf_counter() - t0) * 1000, 3),
+        modelo_versao=versao, latencia_ms=round((time.perf_counter() - t0) * 1000, 3),
     )
     sessao.add(registro)
     sessao.commit()
