@@ -1,0 +1,69 @@
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://sentinela:sentinela@postgres:5432/sentinela
+  REDIS_URL: redis://redis:6379/0
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  CORS_ORIGINS: http://localhost:3000
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sentinela
+      POSTGRES_PASSWORD: sentinela
+      POSTGRES_DB: sentinela
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinela -d sentinela"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./backend
+    command: uvicorn sentinela.api.main:app --host 0.0.0.0 --port 8000
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  consumer:
+    build: ./backend
+    command: python -m sentinela.consumer
+    environment: *backend-env
+    volumes:
+      - ./backend/artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- -H 0.0.0.0"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - api

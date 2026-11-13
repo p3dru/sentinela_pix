@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+pydantic-settings
+redis
+numpy
+pandas
+lightgbm
+shap
+networkx
+anthropic
+httpx
+pytest
+fakeredis
+ruff
